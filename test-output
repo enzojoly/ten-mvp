@@ -1,72 +1,8 @@
 Build profile: -w ghc-9.8.2 -O1
 In order, the following will be built (use -v for more details):
- - ten-mvp-0.1.0.0 (test:ten-mvp-test) (file test/Spec.hs changed)
+ - ten-mvp-0.1.0.0 (test:ten-mvp-test) (first run)
 Preprocessing test suite 'ten-mvp-test' for ten-mvp-0.1.0.0...
 Building test suite 'ten-mvp-test' for ten-mvp-0.1.0.0...
-[1 of 1] Compiling Main [Source file changed]
-
-test/Spec.hs:16:1: warning: [GHC-66111] [-Wunused-imports]
-    The import of ‘Test.QuickCheck.Function’ is redundant
-      except perhaps to import instances from ‘Test.QuickCheck.Function’
-    To import instances alone, use: import Test.QuickCheck.Function()
-   |
-16 | import Test.QuickCheck.Function (Fun(..), apply) -- For generating functions
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-test/Spec.hs:19:1: warning: [GHC-66111] [-Wunused-imports]
-    The import of ‘Control.Monad.Except’ is redundant
-      except perhaps to import instances from ‘Control.Monad.Except’
-    To import instances alone, use: import Control.Monad.Except()
-   |
-19 | import Control.Monad.Except (MonadError(throwError)) -- Use explicit throwError
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-test/Spec.hs:20:1: warning: [GHC-66111] [-Wunused-imports]
-    The qualified import of ‘Data.Text’ is redundant
-      except perhaps to import instances from ‘Data.Text’
-    To import instances alone, use: import Data.Text()
-   |
-20 | import qualified Data.Text as T
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-test/Spec.hs:21:1: warning: [GHC-66111] [-Wunused-imports]
-    The import of ‘Control.Applicative’ is redundant
-      except perhaps to import instances from ‘Control.Applicative’
-    To import instances alone, use: import Control.Applicative()
-   |
-21 | import Control.Applicative (liftA2) -- Useful for Applicative tests
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-test/Spec.hs:57:17: warning: [GHC-30606] [-Wredundant-constraints]
-    Redundant constraints: (Eq (BuildState TestPhase), Show a,
-                            Show (BuildState TestPhase))
-    In the type signature for:
-         assertEqualM :: forall a.
-                         (Eq a, Eq (BuildState TestPhase), Show a,
-                          Show (BuildState TestPhase)) =>
-                         TestM a -> TestM a -> Property
-   |
-57 | assertEqualM :: (Eq a, Eq (BuildState TestPhase), Show a, Show (BuildState TestPhase))
-   |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-test/Spec.hs:119:20: warning: [GHC-40910] [-Wunused-matches]
-    Defined but not used: ‘f’
-    |
-119 |              \(Fn (f :: Bool -> Char)) (Fn (g :: Int -> Bool)) (x :: Int) (e :: BuildError) ->
-    |                    ^
-
-test/Spec.hs:126:45: warning: [GHC-40910] [-Wunused-matches]
-    Defined but not used: ‘g’
-    |
-126 |              \(Fn (f :: Bool -> Char)) (Fn (g :: Int -> Bool)) (x :: Int) (e :: BuildError) ->
-    |                                             ^
-
-test/Spec.hs:133:65: warning: [GHC-40910] [-Wunused-matches]
-    Defined but not used: ‘x’
-    |
-133 |              \(Fn (f :: Bool -> Char)) (Fn (g :: Int -> Bool)) (x :: Int) (e :: BuildError) ->
-    |                                                                 ^
-[2 of 2] Linking /home/enzo/ten-mvp/dist-newstyle/build/x86_64-linux/ghc-9.8.2/ten-mvp-0.1.0.0/t/ten-mvp-test/build/ten-mvp-test/ten-mvp-test [Objects changed]
 Running 1 test suites...
 Test suite ten-mvp-test: RUNNING...
 
@@ -121,7 +57,7 @@ TenM ('Eval 'Daemon)
     Associativity (pure >>= (pure . f') >>= (throwError . g_err)) [✔]
       +++ OK, passed 100 tests.
 
-Finished in 0.0378 seconds
+Finished in 0.0376 seconds
 23 examples, 0 failures
 Test suite ten-mvp-test: PASS
 Test suite logged to:
