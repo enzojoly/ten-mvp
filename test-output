@@ -1,0 +1,19 @@
+Build profile: -w ghc-9.8.2 -O1
+In order, the following will be built (use -v for more details):
+ - ten-mvp-0.1.0.0 (test:ten-mvp-test) (first run)
+Preprocessing test suite 'ten-mvp-test' for ten-mvp-0.1.0.0...
+Building test suite 'ten-mvp-test' for ten-mvp-0.1.0.0...
+Running 1 test suites...
+Test suite ten-mvp-test: RUNNING...
+--- Running Ten MVP ---
+
+--- Running Eval Action ---
+ten-mvp-test: src/Ten/MonadArchitecture.hs:200:16-20: No instance nor default method for class operation >>=
+
+Test suite ten-mvp-test: FAIL
+Test suite logged to:
+/home/enzo/0-Xten/dist-newstyle/build/x86_64-linux/ghc-9.8.2/ten-mvp-0.1.0.0/t/ten-mvp-test/test/ten-mvp-0.1.0.0-ten-mvp-test.log
+0 of 1 test suites (0 of 1 test cases) passed.
+Error: [Cabal-7125]
+Tests failed for test:ten-mvp-test from ten-mvp-0.1.0.0.
+
