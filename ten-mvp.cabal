@@ -5,8 +5,6 @@ synopsis:           Minimal Viable Product for Ten Monad Architecture
 description:        Testing the core monad stack for the Ten build system.
 license:            MIT
 license-file:       LICENSE
-author:             Enzo J
-maintainer:         business@enzojoly.dev
 category:           Build Tool
 build-type:         Simple
 extra-doc-files:    README.md

@@ -1,262 +1,198 @@
 {-# LANGUAGE DataKinds #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE KindSignatures #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE DeriveAnyClass #-}
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE TypeFamilies #-} -- Needed for singleton definitions
+{-# LANGUAGE TemplateHaskell #-} -- Often used with singletons, but can define manually
+{-# LANGUAGE RankNTypes #-} -- For the runner helper
+{-# LANGUAGE ScopedTypeVariables #-} -- For the runner helper
+{-# LANGUAGE TypeApplications #-} -- For the runner helper
+{-# LANGUAGE DeriveGeneric #-} -- For potential future instances (e.g., Binary)
+{-# LANGUAGE DerivingStrategies #-} -- For deriving Show/Eq on GADTs cleanly
 
+-- | Defines the core TenM monad and its instances,
+--   along with minimal supporting types required for its definition.
 module Ten.MonadArchitecture (
-    -- Core Types mirroring stack components
-    Phase(..), -- Original type
-    PrivilegeTier(..), -- Original type
-    BuildEnv(..),              -- Context for ReaderT
-    BuildState(..),            -- State for StateT (depends on 'p')
-    BuildError(..),            -- Error type for ExceptT
-    Proof(..),                 -- Part of BuildState
+    -- * Core Monad
+    TenM(..),
+    runTenM, -- Export the primitive runner if needed elsewhere
 
-    -- The Monad Definition
-    TenM(..), runTenMInternal, -- Export the constructor temporarily for runners
+    -- * Runner Helper
+    runTenAction,
+    KnownPhase(..), -- Export type classes for potential extension
+    KnownTier(..),
 
-    -- Supporting types used in BuildState/BuildEnv
-    BuildId(..),
-    RunMode(..),
-    BuildStrategy(..),
-    StorePath(..),
-    Derivation(..), -- Simplified for context
-    DerivationInput(..),
-    DerivationOutput(..),
+    -- * Supporting Types (Minimal Definitions)
+    Phase(..),
+    PrivilegeTier(..),
+    SPhase(..),         -- Singleton for Phase
+    SPrivilegeTier(..), -- Singleton for PrivilegeTier
+    BuildEnv(..),       -- Minimal Environment
+    BuildState(..),     -- Minimal GADT State
+    BuildError(..),     -- Minimal Error type
 
-    -- Singletons Types and Constructors -- <<< CORRECTED SECTION
-    SPhase(..),       -- Exports type SPhase and constructors SEval, SBuild
-    SPrivilegeTier(..), -- Exports type SPrivilegeTier and constructors SDaemon, SBuilder
-
-    -- Runner Helper (Example)
-    runTen,
-
-    -- Initial State/Env Helpers (Example)
-    initialEnv, initialEvalState, initialBuildState
+    -- * Re-exports for convenience
+    module Control.Monad.Reader,
+    module Control.Monad.State.Strict,
+    module Control.Monad.Except,
+    module Control.Monad.IO.Class
 ) where
 
-import Control.Monad.Reader (MonadReader(..), ReaderT(..)) -- Explicit constructor import
-import Control.Monad.State (MonadState(..), StateT(..))   -- Explicit constructor import
-import Control.Monad.Except (MonadError(..), ExceptT(..), runExceptT) -- Explicit constructor and RUNNER import
-import Control.Monad.IO.Class (MonadIO(..))
+import Control.Monad.Reader (ReaderT, runReaderT, ask, local, MonadReader)
+import Control.Monad.State.Strict (StateT, runStateT, get, put, modify, MonadState) -- Use strict state
+import Control.Monad.Except (ExceptT, runExceptT, throwError, catchError, MonadError)
+import Control.Monad.IO.Class (MonadIO, liftIO)
+import Control.Monad.Fail (MonadFail(..)) -- Explicit import for clarity
 import Data.Kind (Type)
-import Data.Text (Text) -- Imported Text type
-import Data.Map.Strict (Map)
-import Data.Set (Set)
-import Data.Unique (Unique, hashUnique, newUnique) -- Not used in MVP, but kept from original
-import Data.Singletons -- Import the core definitions
-import Data.Singletons.TH -- Import the Template Haskell functions
-import GHC.Generics (Generic)
-import qualified Data.Map.Strict as Map
-import qualified Data.Set as Set
-import qualified Data.Text as T -- Keep qualified import for potential explicit use
-import System.Exit (ExitCode) -- Not directly used here but potentially relevant
-import Control.DeepSeq (NFData(..)) -- Import class AND methods (rnf)
-import System.IO.Unsafe (unsafePerformIO) -- For default BuildId
+import qualified Data.Text as T
+import GHC.Generics (Generic) -- For potential future instances
 
--- =========================================================================
--- 1. Parameters for TenM (p and t)
--- =========================================================================
+-- -----------------------------------------------------------------------------
+-- Minimal Supporting Types for TenM Definition
+-- -----------------------------------------------------------------------------
 
--- | Build phases (Parameter 'p')
+-- | Represents the distinct phases of computation at compile time.
 data Phase = Eval | Build
-    deriving (Show, Eq, Generic, Enum, Bounded)
-instance NFData Phase
+    deriving (Show, Eq, Ord, Generic)
 
--- | Privilege tiers (Parameter 't')
+-- | Represents the privilege level granted to an action at compile time.
 data PrivilegeTier = Daemon | Builder
-    deriving (Show, Eq, Ord, Generic, Enum, Bounded) -- Added Ord
-instance NFData PrivilegeTier
+    deriving (Show, Eq, Ord, Generic)
 
--- Generate singletons for Phase and PrivilegeTier
--- This generates SPhase(SEval, SBuild) and SPrivilegeTier(SDaemon, SBuilder)
-$(genSingletons [''Phase, ''PrivilegeTier])
+-- | Singleton type for Phase. GADT ensures constructors match types.
+data SPhase (p :: Phase) where
+    SEval :: SPhase 'Eval
+    SBuild :: SPhase 'Build
+deriving instance Show (SPhase p)
+deriving instance Eq (SPhase p)
 
--- =========================================================================
--- 2. Types defining the Context/State/Error for the Stack Layers
--- =========================================================================
 
--- | Core error types (for ExceptT BuildError)
+-- | Singleton type for PrivilegeTier. GADT ensures constructors match types.
+data SPrivilegeTier (t :: PrivilegeTier) where
+    SDaemon :: SPrivilegeTier 'Daemon
+    SBuilder :: SPrivilegeTier 'Builder
+deriving instance Show (SPrivilegeTier t)
+deriving instance Eq (SPrivilegeTier t)
+
+
+-- | Minimal build environment.
+data BuildEnv = BuildEnv {
+    envMarker :: T.Text -- A placeholder field
+} deriving (Show, Eq, Generic)
+
+-- | Minimal build state, parameterized by phase using a GADT.
+data BuildState (p :: Phase) where
+    StEval :: { evalMarker :: Int } -> BuildState 'Eval
+    StBuild :: { buildMarker :: Bool } -> BuildState 'Build
+
+-- Need Show instances for GADTs if you want to print them
+deriving instance Show (BuildState p)
+deriving instance Eq (BuildState p)
+-- Add Generic instance if needed later, requires StandaloneDeriving
+-- deriving instance Generic (BuildState p)
+
+-- | Minimal error type for the monad.
 data BuildError
-    = EvalError Text
-    | BuildFailed Text
-    | StoreError Text
-    | PrivilegeError Text
-    | InternalError Text
-    | PlaceholderError Text
+    = BuildFailed T.Text
+    | SomeOtherError
     deriving (Show, Eq, Generic)
-instance NFData BuildError
 
--- | Store path (needed for BuildState)
-data StorePath = StorePath { storeHash :: !Text, storeName :: !Text }
-    deriving (Show, Eq, Ord, Generic)
-instance NFData StorePath
+-- -----------------------------------------------------------------------------
+-- The TenM Monad Definition and Instances
+-- -----------------------------------------------------------------------------
 
--- | Build identifier type (needed for BuildState)
--- Using Int for simplicity in MVP and testing
-newtype BuildId = BuildId Int deriving (Show, Eq, Ord, Generic, Num, NFData)
-
--- Create a globally unique initial BuildId for convenience
-{-# NOINLINE initialBuildId #-}
-initialBuildId :: BuildId
-initialBuildId = BuildId 0 -- Simpler for MVP
-
--- | Derivation Input/Output/Definition (needed for BuildState buildChain)
-data DerivationInput = DerivationInput { inputPath :: !StorePath, inputName :: !Text }
-    deriving (Show, Eq, Ord, Generic)
-instance NFData DerivationInput
-
-data DerivationOutput = DerivationOutput { outputName :: !Text, outputPath :: !StorePath }
-    deriving (Show, Eq, Ord, Generic)
-instance NFData DerivationOutput
-
-data BuildStrategy = ApplicativeStrategy | MonadicStrategy
-    deriving (Show, Eq, Generic, Enum, Bounded)
-instance NFData BuildStrategy
-
-data Derivation = Derivation
-    { derivName :: !Text
-    , derivHash :: !Text
-    , derivBuilder :: !StorePath
-    , derivArgs :: ![Text]
-    , derivInputs :: !(Set DerivationInput)
-    , derivOutputs :: !(Set DerivationOutput)
-    , derivEnv :: !(Map Text Text)
-    , derivSystem :: !Text
-    , derivStrategy :: !BuildStrategy
-    , derivMeta :: !(Map Text Text)
-    } deriving (Show, Eq, Generic)
-instance NFData Derivation
-
--- | Proofs (Part of BuildState, parameterized by Phase 'p')
-data Proof (p :: Phase) where
-    TypeProof         :: Proof 'Eval
-    AcyclicProof      :: Proof 'Eval
-    EvalCompleteProof :: Proof 'Eval
-    InputProof        :: Proof 'Build
-    BuildProof        :: Proof 'Build
-    OutputProof       :: Proof 'Build
-
-deriving instance Show (Proof p)
-deriving instance Eq (Proof p)
--- Cannot derive Generic for GADTs easily, NFData needs manual instance if required
-instance NFData (Proof p) where rnf !_ = () -- Simple one, might need refinement
-
--- | State carried through build operations (for StateT (BuildState p))
-data BuildState (p :: Phase) = BuildState
-    { buildProofs      :: ![Proof p]
-    , buildInputs      :: !(Set StorePath)
-    , buildOutputs     :: !(Set StorePath)
-    , currentBuildId   :: !BuildId
-    , buildChain       :: ![Derivation]
-    , recursionDepth   :: !Int
-    , currentPhase     :: !Phase -- Runtime phase info
-    } deriving (Show, Generic)
-
--- Need NFData instance for BuildState
-instance NFData (BuildState p) where
-    rnf (BuildState proofs inputs outputs bid chain depth phase) =
-        rnf proofs `seq` rnf inputs `seq` rnf outputs `seq` rnf bid `seq` rnf chain `seq` rnf depth `seq` rnf phase
-
--- | Running mode (part of BuildEnv)
-data RunMode = StandaloneMode | ClientMode | DaemonMode
-    deriving (Show, Eq, Generic, Enum, Bounded)
-instance NFData RunMode
-
--- | Environment for build operations (for ReaderT BuildEnv)
--- Corrected version: only one storeLocation field
-data BuildEnv = BuildEnv
-    { workDir              :: !FilePath
-    , storeLocation        :: !FilePath -- Correct: Only one instance
-    , verbosity            :: !Int
-    , allowedPaths         :: !(Set FilePath)
-    , runMode              :: !RunMode
-    , nameOfUser           :: !(Maybe Text) -- Expects Text
-    , buildStrategy        :: !BuildStrategy
-    , maxRecursionDepth    :: !Int
-    , maxConcurrentBuilds  :: !(Maybe Int)
-    , currentPrivilegeTier :: !PrivilegeTier -- Runtime privilege info
-    } deriving (Show, Generic)
-instance NFData BuildEnv
-
--- =========================================================================
--- 3. The TenM Monad Transformer Stack Definition
--- =========================================================================
+-- | The core monad for all Ten operations
+-- Parameterised by phase and privilege tier with singleton evidence passing
 newtype TenM (p :: Phase) (t :: PrivilegeTier) a = TenM
-    { runTenMInternal :: ReaderT BuildEnv (StateT (BuildState p) (ExceptT BuildError IO)) a }
-    deriving ( Functor
-             , Applicative
-             , Monad
-             , MonadIO
-             , MonadError BuildError
-             , MonadState (BuildState p)
-             , MonadReader BuildEnv
-             )
+    { -- | The primitive runner requiring explicit singleton evidence.
+      runTenM :: SPhase p -> SPrivilegeTier t -> ReaderT BuildEnv (StateT (BuildState p) (ExceptT BuildError IO)) a
+    }
 
+-- Standard instances for TenM
+instance Functor (TenM p t) where
+    fmap f (TenM g) = TenM $ \sp st -> fmap f (g sp st)
+    {-# INLINE fmap #-}
+
+instance Applicative (TenM p t) where
+    pure x = TenM $ \_ _ -> pure x
+    {-# INLINE pure #-}
+    (TenM f) <*> (TenM g) = TenM $ \sp st -> f sp st <*> g sp st
+    {-# INLINE (<*>) #-}
+
+instance Monad (TenM p t) where
+    (TenM m) >>= f = TenM $ \sp st -> do
+        a <- m sp st
+        let (TenM m') = f a
+        m' sp st
+    {-# INLINE (>>=) #-}
+
+-- MonadError instance allows throwError and catchError
+instance MonadError BuildError (TenM p t) where
+    throwError e = TenM $ \_ _ -> throwError e
+    {-# INLINE throwError #-}
+    catchError (TenM m) h = TenM $ \sp st ->
+        catchError (m sp st) (\e -> let (TenM m') = h e in m' sp st)
+    {-# INLINE catchError #-}
+
+-- MonadReader instance allows ask and local
+instance MonadReader BuildEnv (TenM p t) where
+    ask = TenM $ \_ _ -> ask
+    {-# INLINE ask #-}
+    local f (TenM m) = TenM $ \sp st -> local f (m sp st)
+    {-# INLINE local #-}
+
+-- MonadState instance allows get and put
+instance MonadState (BuildState p) (TenM p t) where
+    get = TenM $ \_ _ -> get
+    {-# INLINE get #-}
+    put s = TenM $ \_ _ -> put s
+    {-# INLINE put #-}
+
+-- MonadIO instance allows liftIO
+instance MonadIO (TenM p t) where
+    liftIO m = TenM $ \_ _ -> liftIO m
+    {-# INLINE liftIO #-}
+
+-- MonadFail instance for pattern matching in do-notation
 instance MonadFail (TenM p t) where
-    fail msg = throwError $ InternalError $ T.pack ("MonadFail: " ++ msg) -- Explicit pack needed here
+    fail msg = TenM $ \_ _ -> throwError $ BuildFailed $ T.pack msg
+    {-# INLINE fail #-}
 
--- =========================================================================
--- Helper function to run
--- =========================================================================
+-- -----------------------------------------------------------------------------
+-- Runner Helper
+-- -----------------------------------------------------------------------------
 
--- Generic runner
-runTen :: BuildEnv              -- ^ Initial environment
-       -> BuildState p          -- ^ Initial state (phase-specific)
-       -> TenM p t a            -- ^ The computation to run
-       -> IO (Either BuildError (a, BuildState p))
-runTen env state (TenM m) =
-    runExceptT (runStateT (runReaderT m env) state) -- Uses runExceptT
+-- | Typeclass to automatically provide the SPhase singleton.
+class KnownPhase (p :: Phase) where
+    phaseVal :: SPhase p
 
--- =========================================================================
--- Initial State/Env Helpers (Example)
--- =========================================================================
+instance KnownPhase 'Eval where
+    phaseVal = SEval
 
-initialEnv :: PrivilegeTier -> BuildEnv
-initialEnv priv = BuildEnv
-    { workDir              = "/tmp/ten-work"
-    , storeLocation        = "/ten/store"
-    , verbosity            = 1
-    , allowedPaths         = Set.singleton "/ten/store"
-    , runMode              = DaemonMode -- Example default
-      -- "testuser" now interpreted as Text due to OverloadedStrings
-    , nameOfUser           = Just "testuser"
-    , buildStrategy        = ApplicativeStrategy
-    , maxRecursionDepth    = 100
-    , maxConcurrentBuilds  = Just 4
-    , currentPrivilegeTier = priv
-    }
+instance KnownPhase 'Build where
+    phaseVal = SBuild
 
-initialEvalState :: BuildState 'Eval
-initialEvalState = BuildState
-    { buildProofs      = []
-    , buildInputs      = Set.empty
-    , buildOutputs     = Set.empty
-    , currentBuildId   = initialBuildId
-    , buildChain       = []
-    , recursionDepth   = 0
-    , currentPhase     = Eval
-    }
+-- | Typeclass to automatically provide the SPrivilegeTier singleton.
+class KnownTier (t :: PrivilegeTier) where
+    tierVal :: SPrivilegeTier t
 
-initialBuildState :: BuildState 'Build
--- Corrected version: fields not duplicated
-initialBuildState = BuildState
-    { buildProofs      = []
-    , buildInputs      = Set.empty
-    , buildOutputs     = Set.empty
-    , currentBuildId   = initialBuildId
-    , buildChain       = []
-    , recursionDepth   = 0
-    , currentPhase     = Build
-    }
+instance KnownTier 'Daemon where
+    tierVal = SDaemon
+
+instance KnownTier 'Builder where
+    tierVal = SBuilder
+
+-- | Runs a TenM action, automatically inferring the phase and tier singletons.
+runTenAction :: forall p t a. (KnownPhase p, KnownTier t)
+             => BuildEnv          -- ^ Initial environment
+             -> BuildState p      -- ^ Initial state (must match phase 'p')
+             -> TenM p t a        -- ^ The action to run
+             -> IO (Either BuildError (a, BuildState p)) -- ^ Final result or error
+runTenAction env initialState action =
+    let sp = phaseVal @p
+        stier = tierVal @t
+        readerT = runTenM action sp stier
+        stateT = runReaderT readerT env
+        exceptT = runStateT stateT initialState
+    in runExceptT exceptT

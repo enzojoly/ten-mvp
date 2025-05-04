@@ -1,19 +1,129 @@
 Build profile: -w ghc-9.8.2 -O1
 In order, the following will be built (use -v for more details):
- - ten-mvp-0.1.0.0 (test:ten-mvp-test) (first run)
+ - ten-mvp-0.1.0.0 (test:ten-mvp-test) (file test/Spec.hs changed)
 Preprocessing test suite 'ten-mvp-test' for ten-mvp-0.1.0.0...
 Building test suite 'ten-mvp-test' for ten-mvp-0.1.0.0...
+[1 of 1] Compiling Main [Source file changed]
+
+test/Spec.hs:16:1: warning: [GHC-66111] [-Wunused-imports]
+    The import of ‘Test.QuickCheck.Function’ is redundant
+      except perhaps to import instances from ‘Test.QuickCheck.Function’
+    To import instances alone, use: import Test.QuickCheck.Function()
+   |
+16 | import Test.QuickCheck.Function (Fun(..), apply) -- For generating functions
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+test/Spec.hs:19:1: warning: [GHC-66111] [-Wunused-imports]
+    The import of ‘Control.Monad.Except’ is redundant
+      except perhaps to import instances from ‘Control.Monad.Except’
+    To import instances alone, use: import Control.Monad.Except()
+   |
+19 | import Control.Monad.Except (MonadError(throwError)) -- Use explicit throwError
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+test/Spec.hs:20:1: warning: [GHC-66111] [-Wunused-imports]
+    The qualified import of ‘Data.Text’ is redundant
+      except perhaps to import instances from ‘Data.Text’
+    To import instances alone, use: import Data.Text()
+   |
+20 | import qualified Data.Text as T
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+test/Spec.hs:21:1: warning: [GHC-66111] [-Wunused-imports]
+    The import of ‘Control.Applicative’ is redundant
+      except perhaps to import instances from ‘Control.Applicative’
+    To import instances alone, use: import Control.Applicative()
+   |
+21 | import Control.Applicative (liftA2) -- Useful for Applicative tests
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+test/Spec.hs:57:17: warning: [GHC-30606] [-Wredundant-constraints]
+    Redundant constraints: (Eq (BuildState TestPhase), Show a,
+                            Show (BuildState TestPhase))
+    In the type signature for:
+         assertEqualM :: forall a.
+                         (Eq a, Eq (BuildState TestPhase), Show a,
+                          Show (BuildState TestPhase)) =>
+                         TestM a -> TestM a -> Property
+   |
+57 | assertEqualM :: (Eq a, Eq (BuildState TestPhase), Show a, Show (BuildState TestPhase))
+   |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+test/Spec.hs:119:20: warning: [GHC-40910] [-Wunused-matches]
+    Defined but not used: ‘f’
+    |
+119 |              \(Fn (f :: Bool -> Char)) (Fn (g :: Int -> Bool)) (x :: Int) (e :: BuildError) ->
+    |                    ^
+
+test/Spec.hs:126:45: warning: [GHC-40910] [-Wunused-matches]
+    Defined but not used: ‘g’
+    |
+126 |              \(Fn (f :: Bool -> Char)) (Fn (g :: Int -> Bool)) (x :: Int) (e :: BuildError) ->
+    |                                             ^
+
+test/Spec.hs:133:65: warning: [GHC-40910] [-Wunused-matches]
+    Defined but not used: ‘x’
+    |
+133 |              \(Fn (f :: Bool -> Char)) (Fn (g :: Int -> Bool)) (x :: Int) (e :: BuildError) ->
+    |                                                                 ^
+[2 of 2] Linking /home/enzo/ten-mvp/dist-newstyle/build/x86_64-linux/ghc-9.8.2/ten-mvp-0.1.0.0/t/ten-mvp-test/build/ten-mvp-test/ten-mvp-test [Objects changed]
 Running 1 test suites...
 Test suite ten-mvp-test: RUNNING...
---- Running Ten MVP ---
 
---- Running Eval Action ---
-ten-mvp-test: src/Ten/MonadArchitecture.hs:200:16-20: No instance nor default method for class operation >>=
+TenM ('Eval 'Daemon)
+  Functor Laws
+    Identity (pure): fmap id . pure === pure [✔]
+      +++ OK, passed 100 tests.
+    Identity (error): fmap id . throwError === throwError [✔]
+      +++ OK, passed 100 tests.
+    Composition (pure): fmap (f . g) . pure === (fmap f . fmap g) . pure [✔]
+      +++ OK, passed 100 tests.
+    Composition (error): fmap (f . g) . throwError === (fmap f . fmap g) . throwError [✔]
+      +++ OK, passed 100 tests.
+  Applicative Laws
+    Identity: pure id <*> v === v (testing with pure) [✔]
+      +++ OK, passed 100 tests.
+    Identity: pure id <*> v === v (testing with error) [✔]
+      +++ OK, passed 100 tests.
+    Homomorphism: pure f <*> pure x === pure (f x) [✔]
+      +++ OK, passed 100 tests.
+    Interchange: u <*> pure y === pure ($ y) <*> u (testing with u = pure f) [✔]
+      +++ OK, passed 100 tests.
+    Interchange: u <*> pure y === pure ($ y) <*> u (testing with u = error) [✔]
+      +++ OK, passed 100 tests.
+    Composition (pure): pure (.) <*> pure f <*> pure g <*> pure x === pure f <*> (pure g <*> pure x) [✔]
+      +++ OK, passed 100 tests.
+    Composition (error left): pure (.) <*> error <*> v <*> w === error <*> (v <*> w) [✔]
+      +++ OK, passed 100 tests.
+    Composition (error middle): pure (.) <*> u <*> error <*> w === u <*> (error <*> w) [✔]
+      +++ OK, passed 100 tests.
+    Composition (error right): pure (.) <*> u <*> v <*> error === u <*> (v <*> error) [✔]
+      +++ OK, passed 100 tests.
+    fmap f x === pure f <*> x (pure) [✔]
+      +++ OK, passed 100 tests.
+    fmap f x === pure f <*> x (error) [✔]
+      +++ OK, passed 100 tests.
+  Monad Laws
+    Left Identity (k returns pure): pure a >>= (pure . k') === pure (k' a) [✔]
+      +++ OK, passed 100 tests.
+    Left Identity (k throws error): pure a >>= (throwError . k_err) === throwError (k_err a) [✔]
+      +++ OK, passed 100 tests.
+    Right Identity: m >>= pure === m (testing with pure) [✔]
+      +++ OK, passed 100 tests.
+    Right Identity: m >>= pure === m (testing with error) [✔]
+      +++ OK, passed 100 tests.
+    Associativity (pure >>= (pure . f') >>= (pure . g')) [✔]
+      +++ OK, passed 100 tests.
+    Associativity (error >>= (pure . f') >>= (pure . g')) [✔]
+      +++ OK, passed 100 tests.
+    Associativity (pure >>= (throwError . f_err) >>= (pure . g')) [✔]
+      +++ OK, passed 100 tests.
+    Associativity (pure >>= (pure . f') >>= (throwError . g_err)) [✔]
+      +++ OK, passed 100 tests.
 
-Test suite ten-mvp-test: FAIL
+Finished in 0.0378 seconds
+23 examples, 0 failures
+Test suite ten-mvp-test: PASS
 Test suite logged to:
-/home/enzo/0-Xten/dist-newstyle/build/x86_64-linux/ghc-9.8.2/ten-mvp-0.1.0.0/t/ten-mvp-test/test/ten-mvp-0.1.0.0-ten-mvp-test.log
-0 of 1 test suites (0 of 1 test cases) passed.
-Error: [Cabal-7125]
-Tests failed for test:ten-mvp-test from ten-mvp-0.1.0.0.
-
+/home/enzo/ten-mvp/dist-newstyle/build/x86_64-linux/ghc-9.8.2/ten-mvp-0.1.0.0/t/ten-mvp-test/test/ten-mvp-0.1.0.0-ten-mvp-test.log
+1 of 1 test suites (1 of 1 test cases) passed.
