@@ -1,0 +1,25 @@
+ten-mvp
+├── app
+│   └── Main.hs
+├── CHANGELOG.md
+├── dist-newstyle
+├── documentation
+│   ├── doc-index.html
+│   ├── haddock-bundle.min.js
+│   ├── index.html
+│   ├── linuwial.css
+│   ├── meta.json
+│   ├── quick-jump.css
+│   ├── synopsis.png
+│   ├── Ten-MonadArchitecture.html
+│   └── ten-mvp.haddock
+├── LICENSE
+├── src
+│   └── Ten
+│       └── MonadArchitecture.hs
+├── ten-mvp.cabal
+├── test
+│   └── Spec.hs
+└── test-output
+
+107 directories, 474 files
